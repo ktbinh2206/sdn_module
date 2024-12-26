@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("sdnmodule")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+d5bcfa571b02e08ef43971447cc78c23bc57d97b")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+dee7af38ce038840672b0b1ceba58bcc5bc5dc7e")]
 [assembly: System.Reflection.AssemblyProductAttribute("sdnmodule")]
 [assembly: System.Reflection.AssemblyTitleAttribute("sdnmodule")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
