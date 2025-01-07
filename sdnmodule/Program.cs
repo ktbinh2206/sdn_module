@@ -6,8 +6,9 @@ namespace sdnmodule
     internal class Program
     {
         #region Constants
-        const string sourceDirectory = @"D:\Studying Materials\LastDance\Research\FerModulization\sdnprojects"; // Thư mục chứa các file ZIP
-        const string extractedDirectory = @"D:\Studying Materials\LastDance\Research\FerModulization\extracted_projects"; // Thư mục giải nén
+        const string sourceDirectory = @"D:\Studying Materials\LastDance\Capstone\Research\FerModulization\sdnprojects"; // Thư mục chứa các file ZIP
+        const string extractedDirectory = @"D:\Studying Materials\LastDance\Capstone\Research\FerModulization\extracted_projects"; // Thư mục giải nén
+        const string destinationProjectsPath = "/app"; // Thư mục trong container chứa project Node.js
 
         const string dockerExePath = @"C:\Program Files\Docker\Docker\Docker Desktop.exe"; // Đường dẫn đến Docker CLI
 
@@ -15,7 +16,7 @@ namespace sdnmodule
         const string nodeContainerName = "node-env"; // Tên container chứa Node.js
         const string mongoContainerName = "mongo-env"; // Tên container chứa MongoDB
 
-        const string localDatabasePath = @"D:\Studying Materials\LastDance\Research\FerModulization\sdn-database"; // Folder where JSON files are stored
+        const string localDatabasePath = @"D:\Studying Materials\LastDance\Capstone\Research\FerModulization\sdn-database"; // Folder where JSON files are stored
         const string destinationDatabasePath = "/sdn-database"; // Folder inside the container where JSON files are copied to
         const string databaseName = "PE_Fall2024_B5"; // Database name
         #endregion
@@ -28,9 +29,8 @@ namespace sdnmodule
             {
                 CreateNetWork(networkName);
                 CreateMongoEnv(mongoContainerName, networkName, localDatabasePath, destinationDatabasePath);
-                ImportDatabase(mongoContainerName, databaseName, localDatabasePath, destinationDatabasePath);
-                CreateNodeEnv(nodeContainerName, extractedDirectory, networkName);
-                StartNodeProject();
+                CreateNodeEnv(nodeContainerName, extractedDirectory, networkName, destinationProjectsPath);
+                StartNodeProjects(destinationProjectsPath);
             }
         }
 
@@ -79,24 +79,28 @@ namespace sdnmodule
                 Console.WriteLine("Docker is ready.");
                 return;
             }
-            Process.Start(dockerExePath);
-            Console.WriteLine("Docker is starting ...");
-            if (Process.GetProcessesByName("Docker Desktop").Length == 0)
-            {
-                Console.WriteLine("Docker Desktop is not running.");
-                return;
-            }
-            // Wait a few seconds to allow Docker to start
-            Thread.Sleep(7000);  // 7 seconds
 
-            // Check if Docker is ready by running the "docker info" command
-            if (IsDockerReady())
+            try
             {
-                Console.WriteLine("Docker is ready.");
+                Process.Start(dockerExePath);
+                Console.WriteLine("Docker is starting ...");
+
+                // Check every second if Docker is ready, up to 10 seconds
+                for (int i = 0; i < 10; i++)
+                {
+                    Thread.Sleep(1000);  // 1 second
+                    if (IsDockerReady())
+                    {
+                        Console.WriteLine("Docker is ready.");
+                        return;
+                    }
+                }
+
+                Console.WriteLine("Docker did not start within 10 seconds.");
             }
-            else
+            catch (Exception ex)
             {
-                Console.WriteLine("Docker is not ready.");
+                Console.WriteLine($"Error starting Docker: {ex.Message}");
             }
         }
 
@@ -128,10 +132,14 @@ namespace sdnmodule
         //create network for 2 containers
         private static void CreateNetWork(string networkName)
         {
-            string networkInfo = RunCommand("docker", "network ls --filter name=" + networkName + " --quiet", "Current network info.");
+            string networkInfo = RunCommand("docker", "network ls --filter name=" + networkName + " --quiet", "");
             if (string.IsNullOrEmpty(networkInfo))
             {
                 RunCommand("docker", "network create " + networkName, "Created network.");
+            }
+            else
+            {
+                Console.WriteLine("Network already exists.");
             }
         }
 
@@ -177,7 +185,7 @@ namespace sdnmodule
         }
 
         //create node env
-        private static void CreateNodeEnv(string nodeContainerName, string sourceDir, string networkName)
+        private static void CreateNodeEnv(string nodeContainerName, string sourceDir, string networkName, string destinationProjectPath)
         {
             if (CheckExistedContainer(nodeContainerName))
             {
@@ -188,14 +196,26 @@ namespace sdnmodule
             }
 
             //run new container
-            RunCommand("docker", "run -d --name " + nodeContainerName + " --network " + networkName + " -v \"" + sourceDir + ":/app\" -p 3000:3000 3001:3001 3002:3002 9001:9001 9002:9002 9003:9003 -it node:22", "Created node-env container.");
+            RunCommand("docker", "run -d --name " + nodeContainerName + " --network " + networkName + " -v \"" + sourceDir + ":" + destinationProjectPath + "\"  -p 3000:3000 -p 9000:9000 -it node:22", "Created node-env container.");
         }
 
         //Start node project
-        static void StartNodeProject()
+        static void StartNodeProjects(string destinationProjectsPath)
         {
-            Console.WriteLine("Starting node project ...");
-            RunCommand("docker", "exec -d -it node-env /bin/sh -c \"cd /app/HE170951/back-end && npm install && npm start\"", "Started node project");
+            StartMultipleNodeProjects(destinationProjectsPath);
+        }
+
+        //Modify .env file in frontend
+        static void ModifyFE(int backendPort, string projectPath)
+        {
+            RunCommand("docker", $"exec -d -it node-env /bin/sh -c \"cd {projectPath} && find ./build/static/js -type f -exec sed -i 's|http://localhost:9999|http://localhost:{backendPort}|g' {{}} +", "");
+        }
+
+        //Modify .env file in backend
+        static void ModifyEnvBE(int port, string projectPath, string projectName)
+        {
+            
+            RunCommand("docker", $"exec -it node-env /bin/sh -c \"cd {projectPath} && echo PORT={port} > .env && echo HOST_NAME={mongoContainerName} >> .env && echo MONGODB_URI=mongodb://{mongoContainerName}:27017 >> .env && echo DB_NAME={databaseName}_{projectName} >> .env\"", "Modified .env file");
         }
 
         //Run Command
@@ -224,9 +244,46 @@ namespace sdnmodule
                 {
                     Console.WriteLine(error);
                 }
+                Console.WriteLine(output);
                 Console.WriteLine(logs);
 
                 return output;
+            }
+        }
+        //Start multiple node projects
+        static void StartMultipleNodeProjects(string destinationProjectsPath)
+        {
+            //install serve package
+            RunCommand("docker", "exec -it node-env /bin/sh -c \"npm install -g serve\"", "Install necessary packages");
+
+            // Get all project directories// Get all project directories inside the Docker container
+            string listDirsCommand = $"exec -it node-env /bin/sh -c \"ls -d {destinationProjectsPath}/*/\"";
+            string result = RunCommand("docker", listDirsCommand, "");
+
+            // Split the result into an array of directories
+            string[] projectDirs = result.Split(new[] { '\t','\r','\n' }, StringSplitOptions.RemoveEmptyEntries);
+
+
+            int fePort = 3000;
+            int bePort = 9000;
+
+            foreach (var projectDir in projectDirs)
+            {
+                string projectName = Path.GetFileName(projectDir.TrimEnd('/'));
+                string fePath = Path.Combine(projectDir, "front-end");
+                string bePath = Path.Combine(projectDir, "back-end");
+
+                // Modify and start front-end
+                ModifyFE(bePort, fePath);
+                RunCommand("docker", $"exec -d -it node-env /bin/sh -c \"cd {fePath} && serve -s build -l {fePort}\"", $"Started front-end for {projectName}");
+
+                // Modify and start back-end
+                ModifyEnvBE(bePort, bePath, projectName);
+                ImportDatabase(mongoContainerName, databaseName + "_" + projectName, localDatabasePath, destinationDatabasePath);
+                RunCommand("docker", $"exec -d -it node-env /bin/sh -c \"cd {bePath} && npm install && npm start\"", $"Started back-end project for {projectName}");
+
+                fePort++;
+                bePort++;
             }
         }
     }

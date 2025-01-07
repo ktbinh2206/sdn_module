@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "D:\\Studying Materials\\LastDance\\DotNet\\sdnmodule\\sdnmodule\\sdnmodule.csproj": {}
+    "D:\\Studying Materials\\LastDance\\Capstone\\DotNet\\sdnmodule\\sdnmodule\\sdnmodule.csproj": {}
   },
   "projects": {
-    "D:\\Studying Materials\\LastDance\\DotNet\\sdnmodule\\sdnmodule\\sdnmodule.csproj": {
+    "D:\\Studying Materials\\LastDance\\Capstone\\DotNet\\sdnmodule\\sdnmodule\\sdnmodule.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "D:\\Studying Materials\\LastDance\\DotNet\\sdnmodule\\sdnmodule\\sdnmodule.csproj",
+        "projectUniqueName": "D:\\Studying Materials\\LastDance\\Capstone\\DotNet\\sdnmodule\\sdnmodule\\sdnmodule.csproj",
         "projectName": "sdnmodule",
-        "projectPath": "D:\\Studying Materials\\LastDance\\DotNet\\sdnmodule\\sdnmodule\\sdnmodule.csproj",
+        "projectPath": "D:\\Studying Materials\\LastDance\\Capstone\\DotNet\\sdnmodule\\sdnmodule\\sdnmodule.csproj",
         "packagesPath": "C:\\Users\\ktbinh2003\\.nuget\\packages\\",
-        "outputPath": "D:\\Studying Materials\\LastDance\\DotNet\\sdnmodule\\sdnmodule\\obj\\",
+        "outputPath": "D:\\Studying Materials\\LastDance\\Capstone\\DotNet\\sdnmodule\\sdnmodule\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
