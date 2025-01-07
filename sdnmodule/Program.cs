@@ -214,7 +214,7 @@ namespace sdnmodule
         //Modify .env file in backend
         static void ModifyEnvBE(int port, string projectPath, string projectName)
         {
-            
+
             RunCommand("docker", $"exec -it node-env /bin/sh -c \"cd {projectPath} && echo PORT={port} > .env && echo HOST_NAME={mongoContainerName} >> .env && echo MONGODB_URI=mongodb://{mongoContainerName}:27017 >> .env && echo DB_NAME={databaseName}_{projectName} >> .env\"", "Modified .env file");
         }
 
@@ -261,7 +261,7 @@ namespace sdnmodule
             string result = RunCommand("docker", listDirsCommand, "");
 
             // Split the result into an array of directories
-            string[] projectDirs = result.Split(new[] { '\t','\r','\n' }, StringSplitOptions.RemoveEmptyEntries);
+            string[] projectDirs = result.Split(new[] { '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
 
 
             int fePort = 3000;
