@@ -21,16 +21,23 @@ namespace sdnmodule
         const string databaseName = "PE_Fall2024_B5"; // Database name
         #endregion
 
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
-            ExtractZipFiles(sourceDirectory, extractedDirectory);
-            RunDocker();
+            var extractTask = Task.Run(() => ExtractZipFiles(sourceDirectory, extractedDirectory));
+            var dockerTask = Task.Run(() => RunDocker());
+            await Task.WhenAll(extractTask, dockerTask);
+
             if (Process.GetProcessesByName("Docker Desktop").Length > 0)
             {
-                CreateNetWork(networkName);
-                CreateMongoEnv(mongoContainerName, networkName, localDatabasePath, destinationDatabasePath);
-                CreateNodeEnv(nodeContainerName, extractedDirectory, networkName, destinationProjectsPath);
-                StartNodeProjects(destinationProjectsPath);
+                var networkTask = Task.Run(() => CreateNetWork(networkName));
+                await networkTask;
+
+                var mongoTask = Task.Run(() => CreateMongoEnv(mongoContainerName, networkName, localDatabasePath, destinationDatabasePath));
+                var nodeTask = Task.Run(() => CreateNodeEnv(nodeContainerName, extractedDirectory, networkName, destinationProjectsPath));
+                await Task.WhenAll(mongoTask, nodeTask);
+
+
+                await StartNodeProjects(destinationProjectsPath);
             }
         }
 
@@ -51,11 +58,13 @@ namespace sdnmodule
             }
             catch (Exception ex)
             {
+                Console.WriteLine("Source Directory doesn't contain zip file");
                 Console.WriteLine($"Error: {ex.Message}");
                 return;
             }
+
             // extract each zip file to corresponding sub-directory
-            foreach (var zipFile in zipFiles)
+            Parallel.ForEach(zipFiles, zipFile =>
             {
                 string extractPath = Path.Combine(targetDir, Path.GetFileNameWithoutExtension(zipFile));
 
@@ -68,7 +77,8 @@ namespace sdnmodule
                 ZipFile.ExtractToDirectory(zipFile, extractPath);
 
                 Console.WriteLine($"Extracted: {zipFile}");
-            }
+            });
+
         }
 
         // Run Docker Desktop
@@ -132,8 +142,8 @@ namespace sdnmodule
         //create network for 2 containers
         private static void CreateNetWork(string networkName)
         {
-            string networkInfo = RunCommand("docker", "network ls --filter name=" + networkName + " --quiet", "");
-            if (string.IsNullOrEmpty(networkInfo))
+            var networkInfo = RunCommand("docker", "network ls --filter name=" + networkName + " --quiet", "");
+            if (string.IsNullOrEmpty(networkInfo.Output))
             {
                 RunCommand("docker", "network create " + networkName, "Created network.");
             }
@@ -146,8 +156,8 @@ namespace sdnmodule
         //check existed container
         private static bool CheckExistedContainer(string containerName)
         {
-            string ContainerInfo = RunCommand("docker", "ps -a --filter name=" + containerName, "Current container");
-            return !string.IsNullOrEmpty(ContainerInfo);
+            var containerInfo = RunCommand("docker", "ps -a --filter name=" + containerName, "Current container");
+            return !string.IsNullOrEmpty(containerInfo.Output);
         }
 
         //create mongo env
@@ -200,10 +210,11 @@ namespace sdnmodule
         }
 
         //Start node project
-        static void StartNodeProjects(string destinationProjectsPath)
+        static async Task StartNodeProjects(string destinationProjectsPath)
         {
             StartMultipleNodeProjects(destinationProjectsPath);
         }
+
 
         //Modify .env file in frontend
         static void ModifyFE(int backendPort, string projectPath)
@@ -215,76 +226,122 @@ namespace sdnmodule
         static void ModifyEnvBE(int port, string projectPath, string projectName)
         {
 
-            RunCommand("docker", $"exec -it node-env /bin/sh -c \"cd {projectPath} && echo PORT={port} > .env && echo HOST_NAME={mongoContainerName} >> .env && echo MONGODB_URI=mongodb://{mongoContainerName}:27017 >> .env && echo DB_NAME={databaseName}_{projectName} >> .env\"", "Modified .env file");
+            RunCommand("docker", $"exec -it node-env /bin/sh -c \"cd {projectPath} && echo PORT={port} > .env && echo HOST_NAME={mongoContainerName} >> .env && echo MONGODB_URI=mongodb://{mongoContainerName}:27017 >> .env && echo DB_NAME={databaseName}_{projectName} >> .env && echo NODE_ENV=production  >> .env \"", "Modified .env file");
         }
 
-        //Run Command
-        static string RunCommand(string cmd, string args, string logs)
+        // Run Command
+        public static (string Output, string Error) RunCommand(string cmd, string args, string logs)
         {
-            ProcessStartInfo startInfo = new ProcessStartInfo
+            try
             {
-                FileName = cmd,
-                Arguments = args,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
-            using (Process process = new Process())
-            {
-                process.StartInfo = startInfo;
-                process.Start();
-
-                string output = process.StandardOutput.ReadToEnd();
-                string error = process.StandardError.ReadToEnd();
-                process.WaitForExit();
-
-                if (!string.IsNullOrEmpty(error))
+                ProcessStartInfo startInfo = new ProcessStartInfo
                 {
-                    Console.WriteLine(error);
-                }
-                Console.WriteLine(output);
-                Console.WriteLine(logs);
+                    FileName = cmd,
+                    Arguments = args,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
 
-                return output;
+                using (Process process = new Process { StartInfo = startInfo })
+                {
+                    Console.WriteLine($"[INFO] Executing command: {cmd} {args}");
+                    Console.WriteLine($"[INFO] Logs: {logs}");
+
+                    process.Start();
+
+                    string output = process.StandardOutput.ReadToEnd();
+                    string error = process.StandardError.ReadToEnd();
+                    process.WaitForExit();
+
+                    if (!string.IsNullOrEmpty(error))
+                    {
+                        Console.WriteLine($"[ERROR] Command Error: {error}");
+                    }
+
+                    Console.WriteLine($"[OUTPUT] Command Output: {output}");
+                    return (output, error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EXCEPTION] An error occurred while executing the command: {ex.Message}");
+                throw;
             }
         }
+
         //Start multiple node projects
         static void StartMultipleNodeProjects(string destinationProjectsPath)
         {
+            // Start timing
+            Stopwatch stopwatch = Stopwatch.StartNew();
+
             //install serve package
-            RunCommand("docker", "exec -it node-env /bin/sh -c \"npm install -g serve\"", "Install necessary packages");
+            RunCommand("docker", "exec -it node-env /bin/sh -c \"npm install -g serve pm2\"", "Install necessary packages");
+
 
             // Get all project directories// Get all project directories inside the Docker container
+
+
             string listDirsCommand = $"exec -it node-env /bin/sh -c \"ls -d {destinationProjectsPath}/*/\"";
-            string result = RunCommand("docker", listDirsCommand, "");
+            var result = RunCommand("docker", listDirsCommand, "").Output;
 
             // Split the result into an array of directories
             string[] projectDirs = result.Split(new[] { '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
 
 
-            int fePort = 3000;
-            int bePort = 9000;
+            int fePort = 2999;
+            int bePort = 8999;
 
-            foreach (var projectDir in projectDirs)
+            Parallel.ForEach(projectDirs, projectDir =>
             {
                 string projectName = Path.GetFileName(projectDir.TrimEnd('/'));
                 string fePath = Path.Combine(projectDir, "front-end");
                 string bePath = Path.Combine(projectDir, "back-end");
 
+                // Thread-safe increment of ports
+                int currentFePort = Interlocked.Increment(ref fePort);
+                int currentBePort = Interlocked.Increment(ref bePort);
+
                 // Modify and start front-end
-                ModifyFE(bePort, fePath);
-                RunCommand("docker", $"exec -d -it node-env /bin/sh -c \"cd {fePath} && serve -s build -l {fePort}\"", $"Started front-end for {projectName}");
+                ModifyFE(currentBePort, fePath);
+                RunCommand("docker", $"exec -d -it node-env /bin/sh -c \"cd {fePath} && serve -s build -l {currentFePort}\"", $"Start front-end for {projectName}");
+                WaitForServiceReady(currentFePort, $"Front-end for {projectName}");
 
                 // Modify and start back-end
-                ModifyEnvBE(bePort, bePath, projectName);
+                ModifyEnvBE(currentBePort, bePath, projectName);
                 ImportDatabase(mongoContainerName, databaseName + "_" + projectName, localDatabasePath, destinationDatabasePath);
-                RunCommand("docker", $"exec -d -it node-env /bin/sh -c \"cd {bePath} && npm install && npm start\"", $"Started back-end project for {projectName}");
+                RunCommand("docker", $"exec -it node-env /bin/sh -c \"cd {bePath} && npm ci\"", $"Install dependencies for back-end project {projectName}");
+                RunCommand("docker", $"exec -d -it node-env /bin/sh -c \"cd {bePath} && pm2 start server.js --name {projectName} --watch\"", $"Start back-end project for {projectName}");
 
-                fePort++;
-                bePort++;
-            }
+                WaitForServiceReady(currentBePort, $"Back-end for {projectName}");
+
+                 Thread.Sleep(1000); // 500ms để giảm tải hệ thống
+            });
+
+            // Stop timing
+            stopwatch.Stop();
+            Console.WriteLine($"All projects are ready. Total time: {stopwatch.Elapsed.TotalSeconds} seconds.");
         }
+
+        // Wait until a service is ready
+        static void WaitForServiceReady(int port, string serviceName)
+        {
+            for (int i = 0; i < 1000; i++) // Check up to 30 times (30 seconds)
+            {
+                var result = RunCommand("docker", $"exec -it node-env /bin/sh -c \"curl -s -w \"%{{http_code}}\" -o /dev/null http://localhost:{port}\"", "").Output;
+                if (result.Trim() != "000")
+                {
+                    Console.WriteLine($"{serviceName} is ready on port {port}.");
+                    return;
+                }
+                Thread.Sleep(2000); 
+            }
+
+            Console.WriteLine($"{serviceName} did not become ready within the expected time.");
+        }
+
     }
+
 }
