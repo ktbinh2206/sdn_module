@@ -5,6 +5,10 @@
     {
       "AbsoluteMoniker": "D:0:0:{71DC4DCC-11AE-4A70-A1C5-39F722D4ED76}|sdnmodule\\sdnmodule.csproj|d:\\studying materials\\lastdance\\capstone\\dotnet\\sdnmodule\\sdnmodule\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{71DC4DCC-11AE-4A70-A1C5-39F722D4ED76}|sdnmodule\\sdnmodule.csproj|solutionrelative:sdnmodule\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{71DC4DCC-11AE-4A70-A1C5-39F722D4ED76}|sdnmodule\\sdnmodule.csproj|d:\\studying materials\\lastdance\\capstone\\dotnet\\sdnmodule\\sdnmodule\\secondsolution.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{71DC4DCC-11AE-4A70-A1C5-39F722D4ED76}|sdnmodule\\sdnmodule.csproj|solutionrelative:sdnmodule\\secondsolution.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     }
   ],
   "DocumentGroupContainers": [
@@ -14,7 +18,7 @@
       "DocumentGroups": [
         {
           "DockedWidth": 440,
-          "SelectedChildIndex": 65,
+          "SelectedChildIndex": 66,
           "Children": [
             {
               "$type": "Bookmark",
@@ -278,13 +282,26 @@
             },
             {
               "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "SecondSolution.cs",
+              "DocumentMoniker": "D:\\Studying Materials\\LastDance\\Capstone\\DotNet\\sdnmodule\\sdnmodule\\SecondSolution.cs",
+              "RelativeDocumentMoniker": "sdnmodule\\SecondSolution.cs",
+              "ToolTip": "D:\\Studying Materials\\LastDance\\Capstone\\DotNet\\sdnmodule\\sdnmodule\\SecondSolution.cs",
+              "RelativeToolTip": "sdnmodule\\SecondSolution.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAqwBEAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-01-16T03:16:21.225Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
               "DocumentIndex": 0,
               "Title": "Program.cs",
               "DocumentMoniker": "D:\\Studying Materials\\LastDance\\Capstone\\DotNet\\sdnmodule\\sdnmodule\\Program.cs",
               "RelativeDocumentMoniker": "sdnmodule\\Program.cs",
-              "ToolTip": "D:\\Studying Materials\\LastDance\\Capstone\\DotNet\\sdnmodule\\sdnmodule\\Program.cs*",
-              "RelativeToolTip": "sdnmodule\\Program.cs*",
-              "ViewState": "AgIAACkBAAAAAAAAAAAQwD8BAAAgAAAAAAAAAA==",
+              "ToolTip": "D:\\Studying Materials\\LastDance\\Capstone\\DotNet\\sdnmodule\\sdnmodule\\Program.cs",
+              "RelativeToolTip": "sdnmodule\\Program.cs",
+              "ViewState": "AgIAADoAAAAAAAAAAAAUwEUAAAAMAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2025-01-07T04:46:41.317Z",
               "EditorCaption": ""

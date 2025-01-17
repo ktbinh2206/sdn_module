@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("sdnmodule")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+1afb35a00bfd11ad4be85582e4db2b8808a6327d")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+6205186786cd78b495bcd0e37d831c5f75ea51da")]
 [assembly: System.Reflection.AssemblyProductAttribute("sdnmodule")]
 [assembly: System.Reflection.AssemblyTitleAttribute("sdnmodule")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

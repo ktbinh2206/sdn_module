@@ -23,7 +23,7 @@ namespace sdnmodule
 
         static async Task Main(string[] args)
         {
-            var extractTask = Task.Run(() => ExtractZipFiles(sourceDirectory, extractedDirectory));
+            var extractTask = Task.Run(() => ExtractZipFilesThenInstallDependencies(sourceDirectory, extractedDirectory));
             var dockerTask = Task.Run(() => RunDocker());
             await Task.WhenAll(extractTask, dockerTask);
 
@@ -42,7 +42,7 @@ namespace sdnmodule
         }
 
         //extract zip files
-        static void ExtractZipFiles(string sourceDir, string targetDir)
+        static void ExtractZipFilesThenInstallDependencies(string sourceDir, string targetDir)
         {
             //if target directory does not exist, create it
             if (!Directory.Exists(targetDir))
@@ -63,6 +63,9 @@ namespace sdnmodule
                 return;
             }
 
+            // Start timing
+            Stopwatch stopwatch = Stopwatch.StartNew();
+
             // extract each zip file to corresponding sub-directory
             Parallel.ForEach(zipFiles, zipFile =>
             {
@@ -76,9 +79,16 @@ namespace sdnmodule
                 }
                 ZipFile.ExtractToDirectory(zipFile, extractPath);
 
+                // Change directory to back-end and run npm ci locally
+                string backendPath = Path.Combine(extractPath, "back-end");
+                RunCommand("cmd.exe", $"/C cd {backendPath} && npm ci --prefer-offline --no-audit --omit=dev", $"Install dependencies for back-end project at {backendPath}");
+
                 Console.WriteLine($"Extracted: {zipFile}");
             });
 
+            // Stop timing
+            stopwatch.Stop();
+            Console.WriteLine($"Total time to extract and install dependencies: {stopwatch.Elapsed.TotalSeconds} seconds.");
         }
 
         // Run Docker Desktop
@@ -204,15 +214,26 @@ namespace sdnmodule
                 RunCommand("docker", "rm -f " + nodeContainerName, "");
                 Console.WriteLine("Removed node container.");
             }
+            //run new container with more RAM and data
+            var createNodeContainerTask = Task.Run(() =>
+            {
+                RunCommand("docker", "run -d --name " + nodeContainerName + " --network " + networkName + " -v \"" + sourceDir + ":" + destinationProjectPath + "\" --memory=\"16g\" --memory-swap=\"16g\" -p 3000:3000 -p 9000:9000 -it node:20-bullseye", "Created node-env container with more RAM and data.");
+            });
 
-            //run new container
-            RunCommand("docker", "run -d --name " + nodeContainerName + " --network " + networkName + " -v \"" + sourceDir + ":" + destinationProjectPath + "\"  -p 3000:3000 -p 9000:9000 -it node:22", "Created node-env container.");
+            createNodeContainerTask.Wait();
+
+            //install serve package and pm2 package in parallel
+            Parallel.Invoke(
+                () => RunCommand("docker", "exec -it node-env /bin/sh -c \"npm install -g serve\"", "Install serve package"),
+                () => RunCommand("docker", "exec -it node-env /bin/sh -c \"npm install -g pm2\"", "Install pm2 package")
+            );
+
         }
 
         //Start node project
         static async Task StartNodeProjects(string destinationProjectsPath)
         {
-            StartMultipleNodeProjects(destinationProjectsPath);
+            StartMultipleNodeProjectsAsync(destinationProjectsPath);
         }
 
 
@@ -272,24 +293,18 @@ namespace sdnmodule
         }
 
         //Start multiple node projects
-        static void StartMultipleNodeProjects(string destinationProjectsPath)
+        static async Task StartMultipleNodeProjectsAsync(string destinationProjectsPath)
         {
-            // Start timing
-            Stopwatch stopwatch = Stopwatch.StartNew();
 
-            //install serve package
-            RunCommand("docker", "exec -it node-env /bin/sh -c \"npm install -g serve pm2\"", "Install necessary packages");
-
-
-            // Get all project directories// Get all project directories inside the Docker container
-
-
+            // Get all project directories inside the Docker container
             string listDirsCommand = $"exec -it node-env /bin/sh -c \"ls -d {destinationProjectsPath}/*/\"";
             var result = RunCommand("docker", listDirsCommand, "").Output;
 
             // Split the result into an array of directories
             string[] projectDirs = result.Split(new[] { '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
 
+            // Start timing
+            Stopwatch stopwatch = Stopwatch.StartNew();
 
             int fePort = 2999;
             int bePort = 8999;
@@ -304,20 +319,26 @@ namespace sdnmodule
                 int currentFePort = Interlocked.Increment(ref fePort);
                 int currentBePort = Interlocked.Increment(ref bePort);
 
-                // Modify and start front-end
-                ModifyFE(currentBePort, fePath);
-                RunCommand("docker", $"exec -d -it node-env /bin/sh -c \"cd {fePath} && serve -s build -l {currentFePort}\"", $"Start front-end for {projectName}");
-                WaitForServiceReady(currentFePort, $"Front-end for {projectName}");
-
-                // Modify and start back-end
-                ModifyEnvBE(currentBePort, bePath, projectName);
-                ImportDatabase(mongoContainerName, databaseName + "_" + projectName, localDatabasePath, destinationDatabasePath);
-                RunCommand("docker", $"exec -it node-env /bin/sh -c \"cd {bePath} && npm ci\"", $"Install dependencies for back-end project {projectName}");
-                RunCommand("docker", $"exec -d -it node-env /bin/sh -c \"cd {bePath} && pm2 start server.js --name {projectName} --watch\"", $"Start back-end project for {projectName}");
-
-                WaitForServiceReady(currentBePort, $"Back-end for {projectName}");
-
-                 Thread.Sleep(1000); // 500ms để giảm tải hệ thống
+                //run FE and BE in parallel
+                Parallel.Invoke(
+                    () =>
+                    {
+                        // Modify and start front-end
+                        ModifyFE(currentBePort, fePath);
+                        RunCommand("docker", $"exec -d -it node-env /bin/sh -c \"cd {fePath} && serve -s build -l {currentFePort}\"", $"Start front-end for {projectName}");
+                        WaitForServiceReady(currentFePort, $"Front-end for {projectName}");
+                    },
+                    () =>
+                    {
+                        // Modify and start back-end
+                        ModifyEnvBE(currentBePort, bePath, projectName);
+                        ImportDatabase(mongoContainerName, databaseName + "_" + projectName, localDatabasePath, destinationDatabasePath);
+                        // Use `npm start -- --max-old-space-size=4096` to increase memory limit for faster startup
+                        //RunCommand("docker", $"exec -d -it node-env /bin/sh -c \"cd {bePath} && node server.js -- --max-old-space-size=4096\"", $"Start back-end project for {projectName}");
+                        RunCommand("docker", $"exec -d -it node-env /bin/sh -c \"cd {bePath} && pm2 start server.js --name {projectName} --watch\"", $"Start back-end project for {projectName}");
+                        WaitForServiceReady(currentBePort, $"Back-end for {projectName}");
+                    }
+                );
             });
 
             // Stop timing
@@ -328,15 +349,21 @@ namespace sdnmodule
         // Wait until a service is ready
         static void WaitForServiceReady(int port, string serviceName)
         {
-            for (int i = 0; i < 1000; i++) // Check up to 30 times (30 seconds)
+
+            Stopwatch installDependenciesStopwatch = Stopwatch.StartNew();
+            for (int i = 0; i < 1000; i++)
             {
                 var result = RunCommand("docker", $"exec -it node-env /bin/sh -c \"curl -s -w \"%{{http_code}}\" -o /dev/null http://localhost:{port}\"", "").Output;
                 if (result.Trim() != "000")
                 {
+
+                    // Stop timing
+                    installDependenciesStopwatch.Stop();
+                    Console.WriteLine($"Project {serviceName}. Total time: {installDependenciesStopwatch.Elapsed.TotalSeconds} seconds.");
                     Console.WriteLine($"{serviceName} is ready on port {port}.");
                     return;
                 }
-                Thread.Sleep(2000); 
+                Thread.Sleep(1000);
             }
 
             Console.WriteLine($"{serviceName} did not become ready within the expected time.");
